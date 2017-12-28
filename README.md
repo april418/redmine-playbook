@@ -2,7 +2,7 @@
 
 ## Platform
 
-- Amazon RDS
+- Amazon Web Service EC2
 
 ## Dependencies
 
@@ -69,7 +69,7 @@ ruby_version=2.4.3
 
 ```bash
 $ git clone https://github.com/april418/redmine-playbook.git
-$ cd pf-infrastructure
+$ cd redmine-playbook
 $ ansible-playbook main.yml -i inventory/hosts
 ```
 
