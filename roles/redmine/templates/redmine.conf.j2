@@ -1,0 +1,36 @@
+upstream redmine {
+  server unix:/var/lib/redmine/tmp/unicorn.sock;
+}
+
+server {
+  listen          80;
+  server_name redmine.example.com;
+
+  root /var/lib/redmine/public;
+
+  proxy_connect_timeout 60;
+  proxy_read_timeout    60;
+  proxy_send_timeout    60;
+
+  # Basic Authentication
+  # auth_basic "members only";
+  # auth_basic_user_file  '/var/lib/redmine/.htpasswd';
+
+  # SSL
+  # ssl on;
+  # ssl_certificate /usr/local/nginx/conf/ca.crt;
+  # ssl_certificate_key /usr/local/nginx/conf/ca.key;
+  # ssl_protocols TLSv1 TLSv1.1 TLSv1.2;
+  # ssl_ciphers HIGH:!ADH:!MD5;
+
+  location / {
+    if (-f $request_filename) {
+      break;
+    }
+
+    proxy_pass http://redmine;
+    proxy_set_header X-Real-IP  $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header Host $http_host;
+  }
+}

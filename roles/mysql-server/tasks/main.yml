@@ -1,0 +1,33 @@
+---
+- name: 'install mysql{{ mysql_version }}-server'
+  yum:
+    name: 'mysql{{ mysql_version }}-server'
+    state: installed
+
+- name: create my.cnf
+  template:
+    src: my.cnf.j2
+    dest: /etc/my.cnf
+    owner: root
+    group: root
+    mode: 0644
+
+- name: start and enable mysqld
+  service:
+    name: mysqld
+    state: started
+    enabled: yes
+
+- name: check root user existance
+  command: "mysql -u root -p'{{ db_root_pass }}' -e 'exit'"
+  register: c
+  ignore_errors: yes
+
+- name: initialize root user
+  command: mysqladmin password '{{ db_root_pass }}'
+  when: c.rc != 0
+
+- name: restart mysqld
+  service:
+    name: mysqld
+    state: restarted

@@ -1,0 +1,37 @@
+---
+- name: 'replace stylesheets'
+  copy:
+    src: '{{ item }}'
+    dest: '{{ redmine_path }}/public/stylesheets/{{ item }}'
+    owner: '{{ user }}'
+    group: '{{ group }}'
+    mode: 0664
+  with_items:
+    - application.css
+    - responsive.css
+
+- name: check installed Dwarf theme
+  stat:
+    path: '{{ redmine_path }}/public/themes/dwarf'
+  register: t
+  become: yes
+  become_user: '{{ user }}'
+
+- name: install Dwarf theme
+  git:
+    repo: 'https://github.com/themondays/Dwarf'
+    dest: /tmp/Dwarf
+  when: not t.stat.exists
+  become: yes
+  become_user: '{{ user }}'
+
+- name: copy Dwarf theme
+  command: 'cp -r /tmp/Dwarf/production/dwarf {{ redmine_path }}/public/themes'
+  when: not t.stat.exists
+  become: yes
+  become_user: '{{ user }}'
+
+- name: restart redmine
+  service:
+    name: redmined
+    state: restarted

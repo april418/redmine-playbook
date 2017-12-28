@@ -1,0 +1,17 @@
+---
+- hosts: redmine
+  become: yes
+  become_user: root
+  roles:
+    - git
+    - mysql
+    - mysql-server
+    - mysql-python
+    - nginx
+    - redmine
+    - redmine-themes
+  vars:
+    home: '/home/{{ user }}'
+    rbenv_path: '{{ home }}/.rbenv'
+    rbenv_plugin_path: '{{ rbenv_path }}/plugins'
+    redmine_path: /var/lib/redmine

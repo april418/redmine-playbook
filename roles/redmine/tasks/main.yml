@@ -1,0 +1,246 @@
+---
+- name: create redmine group
+  group:
+    name: '{{ group }}'
+    state: present
+
+- name: create redmine user
+  user:
+    name: '{{ user }}'
+    password: '{{ pass }}'
+    group: '{{ group }}'
+    state: present
+
+- name: create .bashrc
+  template:
+    src: .bashrc.j2
+    dest: '{{ home }}/.bashrc'
+    owner: '{{ user }}'
+    group: '{{ group }}'
+    mode: 0644
+
+- name: clone rbenv repository
+  git:
+    repo: 'https://github.com/rbenv/rbenv.git'
+    dest: '{{ rbenv_path }}'
+  become: yes
+  become_user: '{{ user }}'
+
+- name: make plugins directory
+  file:
+    path: '{{ rbenv_path }}/plugins'
+    state: directory
+    owner: '{{ user }}'
+    group: '{{ group }}'
+  become: yes
+  become_user: '{{ user }}'
+
+- name: configure
+  command: ./configure
+  args:
+    chdir: '{{ rbenv_path }}/src'
+  become: yes
+  become_user: '{{ user }}'
+
+- name: make
+  make:
+    params:
+      --directory: src
+    chdir: '{{ rbenv_path }}'
+  become: yes
+  become_user: '{{ user }}'
+
+- name: clone ruby-build
+  git:
+    repo: 'https://github.com/rbenv/ruby-build.git'
+    dest: '{{ rbenv_path }}/plugins/ruby-build'
+  become: yes
+  become_user: '{{ user }}'
+
+- name: check installed ruby
+  stat:
+    path: '{{ rbenv_path }}/versions/{{ ruby_version }}'
+  register: r
+
+- name: install dependency packages
+  yum:
+    name: '{{ item }}'
+    state: present
+  with_items:
+    - openssl-devel
+    - readline-devel
+    - zlib-devel
+    - curl-devel
+    - libyaml-devel
+    - ImageMagick
+    - ImageMagick-devel
+
+- name: install ruby
+  command: '{{ rbenv_path }}/bin/rbenv install {{ ruby_version }}'
+  become: yes
+  become_user: '{{ user }}'
+  when: not r.stat.exists
+
+- name: set global
+  command: '{{ rbenv_path }}/bin/rbenv global {{ ruby_version }}'
+  become: yes
+  become_user: '{{ user }}'
+
+- name: clone redmine repository
+  git:
+    repo: https://github.com/redmine/redmine.git
+    dest: '{{ redmine_path }}'
+    version: 3.4-stable
+    force: yes
+
+- name: chown redmine:root
+  file:
+    path: '{{ redmine_path }}'
+    recurse: yes
+    owner: '{{ user }}'
+    group: '{{ group }}'
+
+- name: create database
+  mysql_db:
+    name: '{{ db_schema }}'
+    state: present
+    encoding: '{{ db_charset }}'
+    login_user: root
+    login_password: '{{ db_root_pass }}'
+
+- name: create database user
+  mysql_user:
+    name: '{{ db_user }}'
+    host: localhost
+    password: '{{ db_pass }}'
+    priv: '{{ db_schema }}.*:ALL,GRANT'
+    state: present
+    login_user: root
+    login_password: '{{ db_root_pass }}'
+
+- name: create config/database.yml
+  template:
+    src: database.yml.j2
+    dest: '{{ redmine_path }}/config/database.yml'
+    owner: '{{ user }}'
+    group: '{{ group }}'
+    mode: 0600
+
+- name: create config/configuration.yml
+  template:
+    src: configuration.yml.j2
+    dest: '{{ redmine_path }}/config/configuration.yml'
+    owner: '{{ user }}'
+    group: '{{ group }}'
+    mode: 0600
+
+- name: copy utf8mb4.rb
+  copy:
+    src: utf8mb4.rb
+    dest: '{{ redmine_path }}/config/initializers/utf8mb4.rb'
+    owner: '{{ user }}'
+    group: '{{ group }}'
+    mode: 0664
+
+- name: copy Gemfile.local
+  copy:
+    src: Gemfile.local
+    dest: '{{ redmine_path }}/Gemfile.local'
+    owner: '{{ user }}'
+    group: '{{ group }}'
+    mode: 0664
+
+- name: install gems
+  gem:
+    name: '{{ item }}'
+    state: present
+    executable: '{{ rbenv_path }}/shims/gem'
+  with_items:
+    - bundler
+    - json
+  become: yes
+  become_user: '{{ user }}'
+
+- name: install dependency modules
+  bundler:
+    state: present
+    gem_path: vendor/bundler
+    chdir: '{{ redmine_path }}'
+    executable: '{{ rbenv_path }}/shims/bundle'
+  become: yes
+  become_user: '{{ user }}'
+
+- name: generate secret token
+  command: '{{ rbenv_path }}/shims/bundle exec rake generate_secret_token'
+  args:
+    chdir: '{{ redmine_path }}'
+  become: yes
+  become_user: '{{ user }}'
+
+- name: migrate database
+  command: '{{ rbenv_path }}/shims/bundle exec rake db:migrate'
+  args:
+    chdir: '{{ redmine_path }}'
+  environment:
+    RAILS_ENV: production
+  become: yes
+  become_user: '{{ user }}'
+
+- name: insert default configuration data
+  command: '{{ rbenv_path }}/shims/bundle exec rake redmine:load_default_data'
+  args:
+    chdir: '{{ redmine_path }}'
+  environment:
+    RAILS_ENV: production
+    REDMINE_LANG: ja
+  become: yes
+  become_user: '{{ user }}'
+
+- name: create redmine.conf
+  template:
+    src: redmine.conf.j2
+    dest: /etc/nginx/conf.d/redmine.conf
+    owner: root
+    group: root
+    mode: 0664
+
+- name: create unicorn.rb
+  template:
+    src: unicorn.rb.j2
+    dest: '{{ redmine_path }}/config/unicorn.rb'
+    owner: '{{ user }}'
+    group: '{{ group }}'
+    mode: 0664
+
+- name: copy redmined.sh to /etc/init.d/redmined
+  template:
+    src: redmined.sh.j2
+    dest: /etc/init.d/redmined
+    owner: root
+    group: root
+    mode: 0755
+
+- name: create repos directory
+  file:
+    path: '{{ item }}'
+    state: directory
+    owner: '{{ user }}'
+    group: '{{ group }}'
+  with_items:
+    - /var/git
+    - /var/git/repos
+
+- name: start redmine server
+  service:
+    name: redmined
+    state: started
+    enabled: yes
+  ignore_errors: yes
+  become: yes
+  become_user: '{{ user }}'
+
+- name: start nginx
+  service:
+    name: nginx
+    state: started
+    enabled: yes

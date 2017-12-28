@@ -1,0 +1,5 @@
+---
+- name: 'install mysql{{ mysql_version }}'
+  yum:
+    name: 'mysql{{ mysql_version }}'
+    state: installed

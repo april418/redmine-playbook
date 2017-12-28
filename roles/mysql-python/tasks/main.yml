@@ -1,0 +1,10 @@
+---
+- name: install mysql55-devel
+  yum:
+    name: mysql55-devel
+    state: installed
+
+- name: install MySQL-Python
+  pip:
+    name: MySQL-Python
+    state: present

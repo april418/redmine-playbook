@@ -1,0 +1,12 @@
+# .bashrc
+
+# Source global definitions
+if [ -f /etc/bashrc ]; then
+  . /etc/bashrc
+fi
+
+# User specific aliases and functions
+if [ -d {{ rbenv_path }} ]; then
+  export PATH="{{ rbenv_path }}/bin:$PATH"
+  eval "$({{ rbenv_path }}/bin/rbenv init -)"
+fi
